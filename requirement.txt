@@ -1,0 +1,5 @@
+pymongo
+psycopg2
+python-dotenv
+boto3
+hashlib
