@@ -56,6 +56,7 @@ context = ssl._create_unverified_context()
 
 fields_to_clean = ['PNR No(s)', 'Ticket No(s)']
 
+DAY_IN_MILLISECONDS = 86400000
 
 def clean_data(data, fields_to_clean):
     prefix_pnr = "PNR No(s) - "
@@ -273,27 +274,37 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
 
 if __name__ == '__main__':
     try:
-        endepoch = int(int(datetime.now().replace(microsecond=0, second=0, minute=0, hour=0).strftime('%s')) - 1 * 19800) * 1000
-        startepoch = endepoch - 86400000
-        logging.info("========================================================")
-        logging.info("Start Time: " + str(startepoch) + " End Time: " + str(endepoch))
-        # MongoDB connection setup
-        db = client['MakeMyTrip']
-        client_data_collection = db['Client_ID']
-        # Get all the documents in the 'Client_ID' collection
-        client_data = list(client_data_collection.find())
-        # Processing each client
-        for client_data_document in client_data:
-            logging.info("-----------------------------------------------------------")
-            logging.info("Processing For Org Name: " + str(client_data_document["org_name"]))
-            logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            logging.info("Processing For Flight")
-            getTransactionData(db, startepoch, endepoch, client_data_document, "FLIGHT")
-            logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            logging.info("Processing For Hotel")
-            getTransactionData(db, startepoch, endepoch, client_data_document, "HOTEL")
-            logging.info("-----------------------------------------------------------")
-        logging.info("========================================================")
+        # endepoch = int(int(datetime.now().replace(microsecond=0, second=0, minute=0, hour=0).strftime('%s')) - 1 * 19800) * 1000
+        # startepoch = endepoch - 86400000
+
+        tstarttime = 1717957800000
+        tendtime = tstarttime + DAY_IN_MILLISECONDS
+        scriptendtime = 1718389800000
+        nd = 1
+        while (tendtime <= scriptendtime):
+            logging.info("========================================================")
+            logging.info("Start Time: " + str(tstarttime) + " End Time: " + str(tendtime))
+            # MongoDB connection setup
+            db = client['MakeMyTrip']
+            client_data_collection = db['Client_ID']
+            # Get all the documents in the 'Client_ID' collection
+            client_data = list(client_data_collection.find())
+            # Processing each client
+            for client_data_document in client_data:
+                logging.info("-----------------------------------------------------------")
+                logging.info("Processing For Org Name: " + str(client_data_document["org_name"]))
+                logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                logging.info("Processing For Flight")
+                getTransactionData(db, tstarttime, tendtime, client_data_document, "FLIGHT")
+                logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                logging.info("Processing For Hotel")
+                getTransactionData(db, tstarttime, tendtime, client_data_document, "HOTEL")
+                logging.info("-----------------------------------------------------------")
+            logging.info("========================================================")
+            tstarttime = tstarttime + DAY_IN_MILLISECONDS
+            tendtime = tendtime + DAY_IN_MILLISECONDS
+            logging.info("No. of days completed: " + str(nd))
+            nd = nd + 1
     except Exception as e:
         logging.info("Exception happened in the main: " + str(e))
     finally:
