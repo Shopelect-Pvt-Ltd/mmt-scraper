@@ -213,7 +213,7 @@ def getInvoiceData(client_id, org_id, booking_id, service_provider, booking_type
 
 def getTransactionData(db, startepoch, endepoch, client_data_document, booking_type):
     try:
-        collection_data = db['mmt_data_test']
+        collection_data = db['mmt_data']
         client_id = client_data_document['expense_client_id']
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
