@@ -212,10 +212,9 @@ def getInvoiceData(client_id, org_id, booking_id, service_provider, booking_type
         logging.info("Exception happened in the getInvoiceData: " + str(e))
         return {}
 
-
 def getTransactionData(db, startepoch, endepoch, client_data_document, booking_type):
     try:
-        collection_data = db['mmt_data']
+        collection_data = db['mmt_data_test']
         client_id = client_data_document['expense_client_id']
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
@@ -241,31 +240,60 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
                 data = res.read().decode("utf-8")
                 csv_reader = csv.DictReader(StringIO(data))
                 booking_data = list(csv_reader)
-
+                booking_map = {}
                 for booking in booking_data:
-                    logging.info("Booking Details: " + str(booking))
-                    tempdoc = {}
-                    if '_id' in client_data_document:
-                        del client_data_document['_id']
-
-                    tempdoc.update(client_data_document)
-                    if booking_type == "FLIGHT":
-                        booking = clean_data(booking, fields_to_clean)
-                    invoicedata = {}
                     if 'Booking ID' in booking:
-                        logging.info("Booking Id: " + str(booking['Booking ID']))
+                        bookingId = booking['Booking ID']
+                        if bookingId in booking_map:
+                            booking_map[bookingId].append(booking)
+                        else:
+                            booking_map[bookingId] = [booking]
+
+                for bookingId, booking_data in booking_map.items():
+                    if booking_data is not None and len(booking_data) != 0:
+                        logging.info("BookingId: " + str(bookingId))
+                        logging.info("Booking Details: " + str(booking_data))
+                        tempdoc = {}
                         if booking_type == "FLIGHT":
-                            invoicedata = getInvoiceData(client_id, org_id, booking['Booking ID'],
-                                                         booking['Airline Name(s)'], booking_type)
-                            tempdoc["bookingId"] = booking['Booking ID']
-                        if booking_type == "HOTEL":
-                            invoicedata = getInvoiceData(client_id, org_id, booking['Booking ID'],
-                                                         booking['Hotel Name'], booking_type)
-                            tempdoc["bookingId"] = booking['Booking ID']
-                    tempdoc["booking_data"] = booking
-                    tempdoc["invoice_data"] = invoicedata
-                    tempdoc["booking_type"]=booking_type
-                    collection_data.insert_one(tempdoc)
+                            temp_booking_data = []
+                            for i in range(len(booking_data)):
+                                clean_booking_data = clean_data(booking_data[i], fields_to_clean)
+                                temp_booking_data.append(clean_booking_data)
+                            booking_data = temp_booking_data
+
+                        service_provider = None
+                        if booking_type == "FLIGHT":
+                            service_provider = booking_data[0]['Airline Name(s)']
+                        elif booking_type == "HOTEL":
+                            service_provider = booking_data[0]['Hotel Name']
+
+                        invoicedata = None
+                        if service_provider is not None:
+                            invoicedata = getInvoiceData(client_id, org_id, bookingId, service_provider, booking_type)
+
+                        key_to_check = {"bookingId": bookingId}
+                        if collection_data.find_one(key_to_check) is None:
+                            if '_id' in client_data_document:
+                                del client_data_document['_id']
+                            tempdoc.update(client_data_document)
+                            tempdoc["bookingId"] = bookingId
+                            tempdoc["booking_data"] = booking_data
+                            tempdoc["invoice_data"] = invoicedata
+                            tempdoc["booking_type"] = booking_type
+                            collection_data.insert_one(tempdoc)
+                        else:
+                            result = collection_data.update_one(
+                                key_to_check,
+                                {
+                                    "$set": {
+                                        "booking_data": booking_data,
+                                        "invoice_data": invoicedata
+                                    }
+                                })
+                            if result.matched_count > 0:
+                                logging.info("Updated the document for bookingId: " + str(bookingId))
+                            else:
+                                logging.info("No updates for the bookingId: " + str(bookingId))
                 break
             time.sleep(2)
     except Exception as e:
