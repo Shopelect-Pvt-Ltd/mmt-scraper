@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import time
 import psycopg2
 import hashlib
+import sys
 
 # Setup basic configuration for logging
 logging.basicConfig(
@@ -303,10 +304,12 @@ if __name__ == '__main__':
     try:
         # endepoch = int(int(datetime.now().replace(microsecond=0, second=0, minute=0, hour=0).strftime('%s')) - 1 * 19800) * 1000
         # startepoch = endepoch - 86400000
-
-        tstarttime = 1717957800000
+        if len(sys.argv) < 3:
+            logging.info("Invalid argument..")
+            exit(0)
+        tstarttime = int(sys.argv[1])
         tendtime = tstarttime + DAY_IN_MILLISECONDS
-        scriptendtime = 1718389800000
+        scriptendtime = int(sys.argv[2])
         nd = 1
         while (tendtime <= scriptendtime):
             logging.info("========================================================")
