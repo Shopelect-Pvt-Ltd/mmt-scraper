@@ -45,8 +45,6 @@ conn = psycopg2.connect(
     password=postgres_password
 )
 
-cursor = conn.cursor()
-logging.info("Postgres DB connected successfully.")
 
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
 logging.info("Mongo connection successful")
@@ -109,8 +107,9 @@ def insertData(booking_id, file_hash, booking_type, file_type, service_provider,
                 VALUES (%s, %s, %s,%s, %s, %s,%s) ON CONFLICT DO NOTHING
                 """
         data_to_insert = (booking_id, file_hash, booking_type, file_type, service_provider, "PENDING", s3_link)
-        cursor.execute(insert_query, data_to_insert)
-        conn.commit()
+        with conn.cursor() as cursor:
+            cursor.execute(insert_query, data_to_insert)
+            conn.commit()
         logging.info(
             "Data inserted successfully for (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link): " + str(
                 data_to_insert))
@@ -328,7 +327,4 @@ if __name__ == '__main__':
         logging.info("========================================================")
     except Exception as e:
         logging.info("Exception happened in the main: " + str(e))
-    finally:
-        logging.info("Closing the DB connection")
-        cursor.close()
-        conn.close()
+
