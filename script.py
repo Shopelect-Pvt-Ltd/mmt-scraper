@@ -217,12 +217,18 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
         conn = http.client.HTTPSConnection(HOST_URL, context=context)
+
+        if booking_type == "FLIGHT":
+            reporttype = "FLIGHT_PNR"
+        elif booking_type == "HOTEL":
+            reporttype = "HOTEL"
+
         payload = {
             "expense-client-id": client_id,
             "external-org-id": org_id,
             "from-date": str(startepoch),
             "to-date": str(endepoch),
-            "report-type": booking_type,
+            "report-type": reporttype,
             "level": "INVOICE"
         }
         headers = {
@@ -313,17 +319,15 @@ if __name__ == '__main__':
         client_data = list(client_data_collection.find())
         # Processing each client
         for client_data_document in client_data:
-            if client_data_document["expense_client_id"] == 'ed019308-6cc6-4f26-9e61-6b4941715819' and \
-                    client_data_document['external_org_id'] == '35c22a35-6354-4cca-a0a3-3790a623af53':
-                logging.info("-----------------------------------------------------------")
-                logging.info("Processing For Org Name: " + str(client_data_document["org_name"]))
-                logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                logging.info("Processing For Flight")
-                getTransactionData(db, startepoch, endepoch, client_data_document, "FLIGHT")
-                logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                logging.info("Processing For Hotel")
-                getTransactionData(db, startepoch, endepoch, client_data_document, "HOTEL")
-                logging.info("-----------------------------------------------------------")
+            logging.info("-----------------------------------------------------------")
+            logging.info("Processing For Org Name: " + str(client_data_document["org_name"]))
+            logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+            logging.info("Processing For Flight")
+            getTransactionData(db, startepoch, endepoch, client_data_document, "FLIGHT")
+            logging.info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+            logging.info("Processing For Hotel")
+            getTransactionData(db, startepoch, endepoch, client_data_document, "HOTEL")
+            logging.info("-----------------------------------------------------------")
         logging.info("========================================================")
     except Exception as e:
         logging.info("Exception happened in the main: " + str(e))

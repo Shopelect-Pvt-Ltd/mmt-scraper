@@ -219,12 +219,18 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
         conn = http.client.HTTPSConnection(HOST_URL, context=context)
+
+        if booking_type == "FLIGHT":
+            reporttype = "FLIGHT_PNR"
+        elif booking_type == "HOTEL":
+            reporttype = "HOTEL"
+
         payload = {
             "expense-client-id": client_id,
             "external-org-id": org_id,
             "from-date": str(startepoch),
             "to-date": str(endepoch),
-            "report-type": booking_type,
+            "report-type": reporttype,
             "level": "INVOICE"
         }
         headers = {
