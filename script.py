@@ -258,18 +258,16 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
                         logging.info("BookingId: " + str(bookingId))
                         logging.info("Booking Details: " + str(booking_data))
                         tempdoc = {}
-                        if booking_type == "FLIGHT":
-                            temp_booking_data=[]
-                            for i in range(len(booking_data)):
-                                clean_booking_data = clean_data(booking_data[i], fields_to_clean)
-                                temp_booking_data.append(clean_booking_data)
-                            booking_data=temp_booking_data
-
                         service_provider = None
-                        if booking_type == "FLIGHT":
-                            service_provider = booking_data[0]['Airline Name(s)']
-                        elif booking_type == "HOTEL":
-                            service_provider = booking_data[0]['Hotel Name']
+                        service_provider_arr=[]
+                        for i in range(len(booking_data)):
+                            if booking_type == "FLIGHT":
+                                service_provider_arr.append(booking_data[i]['Airline Name'])
+                            elif booking_type == "HOTEL":
+                                service_provider_arr.append(booking_data[i]['Hotel Name'])
+                        service_provider_arr=list(set(service_provider_arr))
+                        delimiter = ';'
+                        service_provider = delimiter.join(str(item) for item in service_provider_arr)
 
                         invoicedata=None
                         if service_provider is not None:
