@@ -45,7 +45,6 @@ conn = psycopg2.connect(
     password=postgres_password
 )
 
-
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
 logging.info("Mongo connection successful")
 
@@ -210,6 +209,42 @@ def getInvoiceData(client_id, org_id, booking_id, service_provider, booking_type
         logging.info("Exception happened in the getInvoiceData: " + str(e))
         return {}
 
+def getTransactionCustomerData(startepoch, endepoch, client_data_document):
+    client_id = client_data_document['expense_client_id']
+    org_id = client_data_document['external_org_id']
+    conn = http.client.HTTPSConnection(HOST_URL, context=context)
+    payload = {
+        "expense-client-id": client_id,
+        "external-org-id": org_id,
+        "from-date": str(startepoch),
+        "to-date": str(endepoch),
+        "report-type": "FLIGHT",
+        "level": "INVOICE"
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/csv',
+        'Cookie': '_abck=17E55C4AA211B67E2013B8DAC748B665~-1~YAAQmKIauIuvyfGOAQAAABH7CgvADy+xDRdL180XIaiJ3irmnnBSM+RMIwv5tkxrggRXsYaCFbxY8x1MmaHVyogQy3PgqByI6VhzRrVFc/CO6bVpvvz9eEUnu8HSpJ2/6IEYcO3szuvfu5Rie/3l2ncHljNPodObiY/v/O5T1L6DqjHiprPE1XAYxMO4bcbWFY5bdHd/5lt7o1M4NYxPdDAHZ0AzgxBokaEPlKqNUOwcrdbz9yGBdKpEuWqQ5dL3kSNQUmdkJMCrR1zj9yEaMd+q1E+fJxS18J/IDquf26vlOcrbY7Rn7z8wBcwvuAOh9tBW2875OypRY9Q1tChLDA7UHw95ggCJ/6H2XxBEZI3Pn3UVyUGJWfS1j2lveih5mWezKAiexsctMR4=~-1~-1~-1; bm_sz=6D14478164410E7C7B7A8B4A2D9159E5~YAAQmKIauIyvyfGOAQAAABH7ChcmVrqMEgi4J1TS4LA7oDvhVP8acrCwLRC2SY+zqfIL77pjl+JBfZ1Wn3aTPAY11YY6bSNry88ixL90LlqPK+zc368emSSnH0Wc7iRnNAY8x5nf6IUQJTZipbluHJX/P9sbHZB8evG8cw5SvdZiKYrmS0xkQYJCnbPqXSLt3t1HvZ3THrjYXWTEM/P24SMfVgv2kq0KXuwXSaOAQJ1sd++QQeymTa3NpcWSzI9K25/CA2uQWzGN5aqm0q/ad/Q1sl+iKweDTJUhQzvBDRi/DPenESz12FUo87xaR2Ds+Mh61y6JUyT8bDm/qb6LVWib0jet886lQz96mTY8TE71~3486008~3556163'
+
+    }
+    booking_map = {}
+    for i in range(1, 3, 1):
+        conn.request("POST", "/transaction/data", json.dumps(payload), headers)
+        res = conn.getresponse()
+        if res.status == 200:
+            data = res.read().decode("utf-8")
+            csv_reader = csv.DictReader(StringIO(data))
+            booking_data = list(csv_reader)
+            for booking in booking_data:
+                if 'Booking ID' in booking:
+                    bookingId = booking['Booking ID']
+                    if bookingId in booking_map:
+                        booking_map[bookingId].add(booking["Customer GSTN"])
+                    else:
+                        booking_map[bookingId] = set([booking["Customer GSTN"]])
+        time.sleep(2)
+    return booking_map
+
 def getTransactionData(db, startepoch, endepoch, client_data_document, booking_type):
     try:
         collection_data = db['mmt_data']
@@ -218,7 +253,9 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
         conn = http.client.HTTPSConnection(HOST_URL, context=context)
 
+        customergstmap = dict()
         if booking_type == "FLIGHT":
+            customergstmap = getTransactionCustomerData(startepoch, endepoch, client_data_document)
             reporttype = "FLIGHT_PNR"
         elif booking_type == "HOTEL":
             reporttype = "HOTEL"
@@ -254,22 +291,26 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
                             booking_map[bookingId] = [booking]
 
                 for bookingId, booking_data in booking_map.items():
-                    if booking_data is not None and len(booking_data)!=0:
+                    if booking_data is not None and len(booking_data) != 0:
                         logging.info("BookingId: " + str(bookingId))
                         logging.info("Booking Details: " + str(booking_data))
                         tempdoc = {}
                         service_provider = None
-                        service_provider_arr=[]
+                        service_provider_arr = []
                         for i in range(len(booking_data)):
                             if booking_type == "FLIGHT":
+                                if len(customergstmap) != 0:
+                                    customergst = customergstmap.get(booking_data[i]['Booking ID'])
+                                    if customergst is not None:
+                                        booking_data[i]["Customer GSTN"] = list(customergst)[0]
                                 service_provider_arr.append(booking_data[i]['Airline Name'])
                             elif booking_type == "HOTEL":
                                 service_provider_arr.append(booking_data[i]['Hotel Name'])
-                        service_provider_arr=list(set(service_provider_arr))
+                        service_provider_arr = list(set(service_provider_arr))
                         delimiter = ';'
                         service_provider = delimiter.join(str(item) for item in service_provider_arr)
 
-                        invoicedata=None
+                        invoicedata = None
                         if service_provider is not None:
                             invoicedata = getInvoiceData(client_id, org_id, bookingId, service_provider, booking_type)
 
@@ -284,7 +325,7 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
                             tempdoc["booking_type"] = booking_type
                             collection_data.insert_one(tempdoc)
                         else:
-                            result=collection_data.update_one(
+                            result = collection_data.update_one(
                                 key_to_check,
                                 {
                                     "$set": {
@@ -293,9 +334,9 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
                                     }
                                 })
                             if result.matched_count > 0:
-                                logging.info("Updated the document for bookingId: "+str(bookingId))
+                                logging.info("Updated the document for bookingId: " + str(bookingId))
                             else:
-                                logging.info("No updates for the bookingId: "+str(bookingId))
+                                logging.info("No updates for the bookingId: " + str(bookingId))
                 break
             time.sleep(2)
     except Exception as e:
@@ -329,4 +370,3 @@ if __name__ == '__main__':
         logging.info("========================================================")
     except Exception as e:
         logging.info("Exception happened in the main: " + str(e))
-
