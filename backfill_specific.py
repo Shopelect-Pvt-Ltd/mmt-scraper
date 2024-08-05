@@ -38,13 +38,7 @@ postgres_user = os.getenv("PG_USER")
 postgres_password = os.getenv("PG_PASSWORD")
 postgres_port = os.getenv("PG_PORT")
 
-conn = psycopg2.connect(
-    host=postgres_host,
-    database=postgres_db,
-    port=postgres_port,
-    user=postgres_user,
-    password=postgres_password
-)
+
 
 
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
@@ -104,14 +98,21 @@ def downloadFile(filename, url):
 
 def insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_link):
     try:
+        pgconn = psycopg2.connect(
+            host=postgres_host,
+            database=postgres_db,
+            port=postgres_port,
+            user=postgres_user,
+            password=postgres_password
+        )
         insert_query = """
                 INSERT INTO mmt_airline_hotel_booking (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link)
                 VALUES (%s, %s, %s,%s, %s, %s,%s) ON CONFLICT DO NOTHING
                 """
         data_to_insert = (booking_id, file_hash, booking_type, file_type, service_provider, "PENDING", s3_link)
-        with conn.cursor() as cursor:
+        with pgconn.cursor() as cursor:
             cursor.execute(insert_query, data_to_insert)
-            conn.commit()
+            pgconn.commit()
         logging.info(
             "Data inserted successfully for (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link): " + str(
                 data_to_insert))
