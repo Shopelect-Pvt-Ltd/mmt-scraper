@@ -38,6 +38,8 @@ postgres_user = os.getenv("PG_USER")
 postgres_password = os.getenv("PG_PASSWORD")
 postgres_port = os.getenv("PG_PORT")
 
+
+
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
 logging.info("Mongo connection successful")
 
@@ -248,7 +250,7 @@ def getTransactionCustomerData(startepoch, endepoch, client_data_document):
 
 def getTransactionData(db, startepoch, endepoch, client_data_document, booking_type):
     try:
-        collection_data = db['mmt_data']
+        collection_data = db['mmt_data_test2']
         client_id = client_data_document['expense_client_id']
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
@@ -257,7 +259,7 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
         customergstmap = dict()
         if booking_type == "FLIGHT":
             customergstmap = getTransactionCustomerData(startepoch, endepoch, client_data_document)
-            reporttype = "FLIGHT_PNR"
+            reporttype = "FLIGHT_PAX_PNR"
         elif booking_type == "HOTEL":
             reporttype = "HOTEL"
 
