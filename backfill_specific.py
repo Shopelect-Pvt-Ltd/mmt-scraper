@@ -31,14 +31,20 @@ MONGO_URL = os.getenv('MONGO_URL')
 aws_access_key_id = os.getenv('AWS_ACCESS')
 aws_secret_access_key = os.getenv('AWS_SECRET')
 bucket_name = os.getenv('DEST_AWS_BUCKET_NAME')
-
+upload_bucket_name = os.getenv('UPLOAD_AWS_BUCKET_NAME')
 postgres_host = os.getenv("PG_HOST")
 postgres_db = os.getenv("PG_DATABASE")
 postgres_user = os.getenv("PG_USER")
 postgres_password = os.getenv("PG_PASSWORD")
 postgres_port = os.getenv("PG_PORT")
 
-
+conn = psycopg2.connect(
+    host=postgres_host,
+    database=postgres_db,
+    port=postgres_port,
+    user=postgres_user,
+    password=postgres_password
+)
 
 
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
@@ -98,21 +104,14 @@ def downloadFile(filename, url):
 
 def insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_link):
     try:
-        pgconn = psycopg2.connect(
-            host=postgres_host,
-            database=postgres_db,
-            port=postgres_port,
-            user=postgres_user,
-            password=postgres_password
-        )
         insert_query = """
                 INSERT INTO mmt_airline_hotel_booking (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link)
                 VALUES (%s, %s, %s,%s, %s, %s,%s) ON CONFLICT DO NOTHING
                 """
         data_to_insert = (booking_id, file_hash, booking_type, file_type, service_provider, "PENDING", s3_link)
-        with pgconn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute(insert_query, data_to_insert)
-            pgconn.commit()
+            conn.commit()
         logging.info(
             "Data inserted successfully for (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link): " + str(
                 data_to_insert))
@@ -134,14 +133,23 @@ def getS3Url(url, booking_id, booking_type, file_type, service_provider):
 
         s3 = boto3.client('s3', aws_access_key_id=aws_access_key_id,
                           aws_secret_access_key=aws_secret_access_key)
-        object = f"v0/MMTScraping/{booking_type}/{file_type}/{s3_file}"
-        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object}"
-        s3.upload_file(local_file,
-                       bucket_name,
-                       Key=object
-                       )
-        insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_url)
-
+        if booking_type=="FLIGHT" and file_type=="GST":
+            object = f"mmt/{file_type}/{s3_file}"
+            s3_url = f"https://{upload_bucket_name}.s3.amazonaws.com/{object}"
+            s3.upload_file(local_file,
+                           upload_bucket_name,
+                           Key=object
+                           )
+            insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_url)
+        else:
+            object = f"v0/MMTScraping/{booking_type}/{file_type}/{s3_file}"
+            s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object}"
+            s3.upload_file(local_file,
+                           bucket_name,
+                           Key=object
+                           )
+            insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_url)
+        # logging.info("S3 Url is generated successfully: " + str(s3_url))
         if os.path.exists(local_file):
             os.remove(local_file)
         return s3_url

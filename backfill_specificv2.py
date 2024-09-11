@@ -38,6 +38,16 @@ postgres_user = os.getenv("PG_USER")
 postgres_password = os.getenv("PG_PASSWORD")
 postgres_port = os.getenv("PG_PORT")
 
+
+conn = psycopg2.connect(
+    host=postgres_host,
+    database=postgres_db,
+    port=postgres_port,
+    user=postgres_user,
+    password=postgres_password
+)
+
+
 client = MongoClient(MONGO_URL, maxIdleTimeMS=None)
 logging.info("Mongo connection successful")
 
@@ -95,21 +105,14 @@ def downloadFile(filename, url):
 
 def insertData(booking_id, file_hash, booking_type, file_type, service_provider, s3_link):
     try:
-        pgconn = psycopg2.connect(
-            host=postgres_host,
-            database=postgres_db,
-            port=postgres_port,
-            user=postgres_user,
-            password=postgres_password
-        )
         insert_query = """
                 INSERT INTO mmt_airline_hotel_booking (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link)
                 VALUES (%s, %s, %s,%s, %s, %s,%s) ON CONFLICT DO NOTHING
                 """
         data_to_insert = (booking_id, file_hash, booking_type, file_type, service_provider, "PENDING", s3_link)
-        with pgconn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute(insert_query, data_to_insert)
-            pgconn.commit()
+            conn.commit()
         logging.info(
             "Data inserted successfully for (booking_id,file_hash,booking_type,file_type,service_provider,status,s3_link): " + str(
                 data_to_insert))
@@ -257,7 +260,7 @@ def getTransactionCustomerData(startepoch, endepoch, client_data_document):
 
 def getTransactionData(db, startepoch, endepoch, client_data_document, booking_type):
     try:
-        collection_data = db['mmt_data']
+        collection_data = db['mmt_data_test2']
         client_id = client_data_document['expense_client_id']
         org_id = client_data_document['external_org_id']
         logging.info(f"Processing client {client_id} with org {org_id} for {booking_type}")
@@ -266,7 +269,7 @@ def getTransactionData(db, startepoch, endepoch, client_data_document, booking_t
         customergstmap = dict()
         if booking_type == "FLIGHT":
             customergstmap = getTransactionCustomerData(startepoch, endepoch, client_data_document)
-            reporttype = "FLIGHT_PNR"
+            reporttype = "FLIGHT_PAX_PNR"
         elif booking_type == "HOTEL":
             reporttype = "HOTEL"
 
@@ -356,12 +359,13 @@ if __name__ == '__main__':
     try:
         # endepoch = int(int(datetime.now().replace(microsecond=0, second=0, minute=0, hour=0).strftime('%s')) - 1 * 19800) * 1000
         # startepoch = endepoch - 86400000
-        if len(sys.argv) < 3:
+        if len(sys.argv) < 4:
             logging.info("Invalid argument..")
             exit(0)
         tstarttime = int(sys.argv[1])
         tendtime = tstarttime + DAY_IN_MILLISECONDS
         scriptendtime = int(sys.argv[2])
+
         nd = 1
         while (tendtime <= scriptendtime):
             logging.info("========================================================")
@@ -370,7 +374,9 @@ if __name__ == '__main__':
             db = client['MakeMyTrip']
             client_data_collection = db['Client_ID']
             # Get all the documents in the 'Client_ID' collection
-            client_data = list(client_data_collection.find())
+            client_data = list(client_data_collection.find({"expense_client_id":str(sys.argv[3])}))
+            logging.info(client_data)
+
             # Processing each client
             for client_data_document in client_data:
                 logging.info("-----------------------------------------------------------")
